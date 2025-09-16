@@ -49,7 +49,7 @@ prplot your_data.json
 
 **Investigation:**
 - **Click any plot point** → See PR# and details in popup
-- `identify comments > 10` → Show matching PRs in rich tables
+- `identify comments > 10` → Show matching PRs in rich tables with clickable URLs
 - `export WHERE condition TO file.json` → Save filtered data
 
 ## 5-Minute Tutorial
@@ -130,6 +130,8 @@ prplot> identify state = 'open' and age_days > 200
 
 # Find recent activity
 prplot> identify age_days < 30 and activity_score > 10
+
+# Results shown in table with clickable "View PR" links
 ```
 
 ### 8. **Export Results**
@@ -418,6 +420,13 @@ identify age_days < 60 and activity_score > 15
 
 # Label-specific investigation
 identify primary_label contains 'vector' and comments > 2
+
+# Alternative WHERE syntax (both forms work identically)
+identify age_days where age_days > 90 and comments > 5
+
+# Boolean field queries (case-insensitive)
+identify soft_approval_detected = true
+identify is_draft = false
 ```
 
 ### **EXPORT & SAVE - Data Export**

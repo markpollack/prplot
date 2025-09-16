@@ -71,6 +71,13 @@ class QueryEngine:
         # Handle nested field access (e.g., labels_assigned.label)
         series = self._get_field_series(df, field)
 
+        # Handle boolean conversion for string boolean values
+        if series.dtype == 'bool' and isinstance(value, str):
+            if value.lower() == 'true':
+                value = True
+            elif value.lower() == 'false':
+                value = False
+
         if operator in ['=', '==']:
             return series == value
         elif operator in ['!=', '<>']:

@@ -56,9 +56,9 @@ class QueryParser:
         bool_expr = infixNotation(
             comparison,
             [
-                ("NOT", 1, opAssoc.RIGHT),
-                ("AND", 2, opAssoc.LEFT),
-                ("OR", 2, opAssoc.LEFT),
+                (CaselessKeyword("NOT"), 1, opAssoc.RIGHT),
+                (CaselessKeyword("AND"), 2, opAssoc.LEFT),
+                (CaselessKeyword("OR"), 2, opAssoc.LEFT),
             ]
         )
 
@@ -79,9 +79,10 @@ class QueryParser:
         stats_cmd = (CaselessKeyword("STATS") + field +
                     PPOptional(CaselessKeyword("BY") + field) +
                     PPOptional(where_clause))
+        identify_cmd = (CaselessKeyword("IDENTIFY") + bool_expr) | (CaselessKeyword("IDENTIFY") + field + where_clause)
 
         # Complete command
-        self.command = hist_cmd | plot_cmd | trend_cmd | bar_cmd | stats_cmd
+        self.command = hist_cmd | plot_cmd | trend_cmd | bar_cmd | stats_cmd | identify_cmd
 
         # Store sub-parsers for reuse
         self.where_parser = where_clause
@@ -107,8 +108,29 @@ class QueryParser:
         """Interpret the parsed command result."""
         tokens = list(result)
 
+        command_type = tokens[0].lower()
+
+        if command_type == 'identify':
+            # IDENTIFY supports two forms:
+            # 1. IDENTIFY <condition>
+            # 2. IDENTIFY <field> WHERE <condition>
+            if len(tokens) >= 3 and isinstance(tokens[2], str) and tokens[2].upper() == 'WHERE':
+                # Form 2: IDENTIFY field WHERE condition
+                return {
+                    'type': 'identify',
+                    'field': tokens[1],
+                    'where': self._interpret_where_result(tokens[3])
+                }
+            else:
+                # Form 1: IDENTIFY condition (original)
+                return {
+                    'type': 'identify',
+                    'where': self._interpret_where_result(tokens[1])
+                }
+
+        # Other commands: COMMAND field [options]
         command = {
-            'type': tokens[0].lower(),
+            'type': command_type,
             'field': tokens[1],
             'where': None
         }

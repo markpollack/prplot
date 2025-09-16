@@ -273,18 +273,14 @@ class PRAnalysisCLI:
 
     def _handle_identify(self, query: str):
         """Handle identify command to find specific PRs."""
-        # Parse: "identify WHERE condition" or "identify comments > 10 and age_days > 100"
-        if query.lower().startswith('identify where '):
-            where_part = query[15:].strip()
-        elif query.lower().startswith('identify '):
-            where_part = "WHERE " + query[9:].strip()
-        else:
-            self.console.print("[red]Identify syntax: identify WHERE condition[/red]")
-            return
-
         try:
-            # Parse WHERE clause
-            where_clause = self.parser.parse_where_clause(where_part)
+            # Use the parser to handle both syntaxes:
+            # 1. identify condition
+            # 2. identify field where condition
+            parsed_query = self.parser.parse_command(query)
+
+            # Extract the WHERE clause from the parsed result
+            where_clause = parsed_query['where']
             filtered_df = self.query_engine._apply_where_clause(
                 self.data_loader.get_data(), where_clause
             )
@@ -294,7 +290,8 @@ class PRAnalysisCLI:
                 return
 
             # Create table of matching PRs
-            table = Table(title=f"PRs matching: {where_part}")
+            condition_text = query[9:].strip()  # Remove "identify " prefix
+            table = Table(title=f"PRs matching: {condition_text}")
             table.add_column("PR#", style="cyan")
             table.add_column("Title", style="white", max_width=50)
             table.add_column("State", style="green")
@@ -315,8 +312,15 @@ class PRAnalysisCLI:
 
             self.console.print(table)
 
+            # Print full URLs for easy copy-paste
+            self.console.print("\n[dim]Full URLs:[/dim]")
+            for _, row in display_df.iterrows():
+                self.console.print(f"[dim]PR {row['number']}:[/dim] {row['html_url']}")
+
             if len(filtered_df) > 20:
-                self.console.print(f"[yellow]Showing top 20 by age. Total matches: {len(filtered_df)}[/yellow]")
+                self.console.print(f"\n[yellow]Showing top 20 by age. Total matches: {len(filtered_df)}[/yellow]")
+
+            self.console.print(f"\n[dim]💡 Tip: Copy URLs above to open in browser, or use Cmd/Ctrl+Click if your terminal supports it[/dim]")
 
         except Exception as e:
             self.console.print(f"[red]Identify error: {e}[/red]")
