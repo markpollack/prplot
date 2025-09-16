@@ -5,24 +5,31 @@
 ```bash
 $ prplot all_prs_labeled.json
 
-prplot> hist age_days
-prplot> plot comments vs age_days where state = 'open'
+prplot> identify comments > 10
+prplot> plot comments vs age_days where age_days > 90 and comments > 5
 prplot> bar primary_label
 prplot> save analysis.png
 ```
 
 ## Quick Start
 
+### For Development (Claude Code users)
 ```bash
-# One-time setup
+git clone https://github.com/markpollack/prplot.git
+cd prplot
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-
-# Daily usage
-source venv/bin/activate  # if not already active
-python -m prplot all_prs_labeled.json
+python -m prplot your_data.json
 ```
+
+### For End Users
+```bash
+pip install git+https://github.com/markpollack/prplot.git
+prplot your_data.json
+```
+
+> **Note**: Examples below use Spring AI PR data where all PRs happen to be open. For mixed datasets with open/closed PRs, use `WHERE state = 'open'` or `WHERE state = 'closed'` to filter as needed.
 
 ## Supported Plots & Queries
 
@@ -67,14 +74,14 @@ prplot> bar primary_label
 
 ### 3. **Filter with WHERE**
 ```bash
-# Only look at open PRs
-prplot> hist age_days where state = 'open'
-
 # PRs with lots of activity
 prplot> hist comments where comments > 5
 
-# Recent PRs only
-prplot> bar primary_label where age_days < 30
+# Older PRs only
+prplot> hist age_days where age_days > 90
+
+# High-activity old PRs
+prplot> bar primary_label where age_days > 90 and comments > 3
 ```
 
 ### 4. **Correlations**
@@ -82,11 +89,11 @@ prplot> bar primary_label where age_days < 30
 # Do older PRs get more comments?
 prplot> plot age_days vs comments
 
-# Just for open PRs
-prplot> plot age_days vs comments where state = 'open'
+# Focus on active PRs
+prplot> plot age_days vs comments where comments > 2
 
-# Activity vs age
-prplot> plot activity_score vs age_days where state = 'open'
+# Activity vs age patterns
+prplot> plot activity_score vs age_days where age_days > 60
 ```
 
 ### 5. **Time Trends**
@@ -97,8 +104,8 @@ prplot> trend created_at_dt
 # Broken down by label type
 prplot> trend created_at_dt by primary_label
 
-# Recent activity only
-prplot> trend created_at_dt where age_days < 90
+# Focus on older PRs
+prplot> trend created_at_dt where age_days > 90
 ```
 
 ### 6. **Quick Stats**
@@ -323,66 +330,109 @@ The tool expects JSON files with the structure:
 
 ## Complete Examples Reference
 
-### **Quick Data Exploration**
+### **HIST - Distributions & Histograms**
 ```bash
-# Basic distributions
-hist age_days                    # How old are PRs?
-bar state                        # Open vs closed breakdown
-bar primary_label                # Most common labels
-bar time_bucket                  # Age categories
+# Basic age distribution
+hist age_days
 
-# Filter with WHERE
-hist age_days where state = 'open'
-bar primary_label where age_days < 90
+# Comment activity distribution
+hist comments
+
+# Filter for active PRs only
+hist age_days where comments > 5
+
+# Focus on older PRs
+hist comments where age_days > 90 and comments > 0
 ```
 
-### **Interactive Analysis**
+### **PLOT - Interactive Scatter Plots**
 ```bash
-# Scatter plots with clickable points
-plot comments vs age_days where state = 'open'
-plot total_reactions vs comments
-plot activity_score vs age_days
+# Age vs comment correlation
+plot age_days vs comments
 
-# Click any point → See PR# and details!
+# Activity score over time
+plot age_days vs activity_score
+
+# High-activity subset (click points to see PR#!)
+plot age_days vs comments where comments > 5
+
+# Complex filtering
+plot age_days vs total_reactions where age_days > 60 and comments > 2
 ```
 
-### **Time Series Analysis**
+### **BAR - Category Breakdowns**
 ```bash
-# PR creation trends
+# Label distribution
+bar primary_label
+
+# Age category breakdown
+bar time_bucket
+
+# Labels for active PRs only
+bar primary_label where comments > 3
+
+# Complexity distribution for older PRs
+bar complexity where age_days > 90
+```
+
+### **TREND - Time Series Analysis**
+```bash
+# PR creation over time
 trend created_at_dt
+
+# Creation trends by label category
 trend created_at_dt by primary_label
-trend created_at_dt by state where age_days < 180
+
+# Focus on recent activity
+trend created_week where age_days < 120
+
+# Monthly patterns by complexity
+trend created_month by complexity where age_days > 30
 ```
 
-### **Statistical Deep Dives**
+### **STATS - Statistical Summaries**
 ```bash
-# Summary statistics
+# Overall comment statistics
 stats comments
-stats age_days by state
-stats activity_score by complexity
-stats comments by primary_label
+
+# Age breakdown by complexity
+stats age_days by complexity
+
+# Activity analysis by label
+stats activity_score by primary_label
+
+# Comment patterns for older PRs
+stats comments by time_bucket where age_days > 60
 ```
 
-### **Investigation & Export**
+### **IDENTIFY - Find Specific PRs**
 ```bash
-# Find specific PRs
+# High-activity PRs
 identify comments > 10
-identify age_days > 200 and state = 'open'
-identify primary_label contains 'MCP'
 
-# Export for further analysis
-export where state = 'open' and age_days > 180 to stale_prs.json
-export where comments > 5 to active_prs.json
-save correlation_plot.png
+# Old PRs with ongoing discussion
+identify age_days > 200 and comments > 3
+
+# Recent high-engagement PRs
+identify age_days < 60 and activity_score > 15
+
+# Label-specific investigation
+identify primary_label contains 'vector' and comments > 2
 ```
 
-### **Advanced Queries**
+### **EXPORT & SAVE - Data Export**
 ```bash
-# Complex conditions
-plot age_days vs comments where state = 'open' and complexity = 'high'
-bar primary_label where created_year = 2024 and comments > 2
-stats age_days by author where comments > 0
-trend created_week by state where age_days < 90
+# Export high-activity PRs
+export where comments > 5 to active_prs.json
+
+# Export old PRs with discussion
+export where age_days > 180 and comments > 2 to old_active_prs.json
+
+# Export label-specific data
+export where primary_label contains 'vector' to vector_prs.json
+
+# Save current plot
+save correlation_analysis.png
 ```
 
 ### **Field Reference**
