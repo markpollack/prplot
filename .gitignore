@@ -42,7 +42,6 @@ ENV/
 *.log
 
 # Data files (these can be large and user-specific)
-*.json
 !example*.json
 
 # Plots and exports
