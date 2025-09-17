@@ -169,6 +169,31 @@ class QueryParser:
             where_result = where_result.asList()
 
         if isinstance(where_result, list):
+            # Handle IN operator: [field, 'IN', '(', [val1, ',', val2, ...], ')']
+            if (len(where_result) >= 5 and
+                isinstance(where_result[0], str) and
+                where_result[1] == 'IN' and
+                where_result[2] == '(' and
+                where_result[-1] == ')'):
+                field = where_result[0]
+                values_part = where_result[3]  # The list part: [val1, ',', val2, ...]
+
+                # Extract values from the comma-separated list
+                values = []
+                if isinstance(values_part, list):
+                    for i, item in enumerate(values_part):
+                        if i % 2 == 0:  # Skip commas (odd indices)
+                            values.append(item)
+                else:
+                    values = [values_part]
+
+                return {
+                    'type': 'comparison',
+                    'field': field,
+                    'operator': 'IN',
+                    'value': values
+                }
+
             # Handle simple comparison: [field, operator, value]
             if len(where_result) == 3 and isinstance(where_result[0], str) and isinstance(where_result[1], str):
                 field, op, value = where_result

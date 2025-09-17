@@ -203,9 +203,10 @@ WHERE age_days > 180 OR total_reactions > 10
 WHERE author LIKE '%spring%'
 WHERE primary_label CONTAINS 'vector'
 
--- List membership
+-- List membership (IN operator)
 WHERE state IN ('open', 'closed')
 WHERE complexity IN ('high', 'medium')
+WHERE user.login IN ('sunyuhan1998', 'quaff', 'wilocu')
 
 -- Nested field access
 WHERE user.login = 'YunKuiLu'
@@ -434,6 +435,10 @@ identify is_draft = false
 # Nested field access with dot notation
 identify user.login = 'YunKuiLu'
 identify user.login contains 'spring'
+
+# Multiple value matching with IN operator
+identify user.login in ('sunyuhan1998', 'quaff', 'wilocu')
+identify state in ('open', 'closed')
 ```
 
 ### **EXPORT & SAVE - Data Export**

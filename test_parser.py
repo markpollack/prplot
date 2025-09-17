@@ -74,6 +74,15 @@ def test_parser_with_examples():
             "identify state in ('open', 'closed')",
         ],
 
+        "IN Operator Tests": [
+            "identify state in ('open', 'closed')",
+            "identify user.login in ('sunyuhan1998', 'quaff')",
+            "identify complexity in ('high', 'medium', 'low')",
+            "identify primary_label in ('MCP', 'vector')",
+            'identify author in ("user1", "user2", "user3")',  # double quotes
+            "hist age_days where state in ('open')",  # single value
+        ],
+
         "Edge Cases": [
             "HIST AGE_DAYS",  # uppercase
             "hist age_days WHERE comments > 5",  # mixed case
