@@ -128,6 +128,9 @@ prplot> identify state = 'open' and age_days > 200
 # Find recent activity
 prplot> identify age_days < 30 and activity_score > 10
 
+# Find PRs from specific contributors
+prplot> identify user.login in ('sunyuhan1998', 'quaff', 'wilocu')
+
 # Results shown in table with clickable "View PR" links
 ```
 
