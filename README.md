@@ -305,8 +305,10 @@ The tool expects JSON files with the structure:
 
 ### Tab Completion
 - Field names, commands, and operators auto-complete
+- **Nested field completion**: Type `user.` and get `login`, `id`, `node_id` suggestions
 - Context-aware suggestions based on field types
 - Sample values for categorical fields
+- Smart completion for nested objects like `user.login`, `reactions.total_count`
 
 ### Command History
 - Previous commands saved across sessions
@@ -447,6 +449,15 @@ export where primary_label contains 'vector' to vector_prs.json
 
 # Save current plot
 save correlation_analysis.png
+```
+
+### **Tab Completion Examples**
+```bash
+# Type and press TAB for completions:
+plot user<TAB>          # → user, user.
+plot user.<TAB>         # → user.login, user.id, user.node_id, user.avatar_url...
+plot user.lo<TAB>       # → user.login
+identify reactions.<TAB> # → reactions.total_count, reactions.+1, reactions.-1...
 ```
 
 ### **Field Reference**

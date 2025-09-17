@@ -26,6 +26,7 @@ class PRCompleter(Completer):
     def __init__(self, data_loader: PRDataLoader):
         self.data_loader = data_loader
         self.field_info = data_loader.get_field_info()
+        self.df = data_loader.get_data()
 
         # Command keywords
         self.commands = [
@@ -35,11 +36,30 @@ class PRCompleter(Completer):
             'help', 'fields', 'quit', 'exit'
         ]
 
-        # Field names
+        # Field names (including nested fields)
         self.fields = list(self.field_info.keys())
+        self.nested_fields = self._build_nested_fields()
 
         # Common operators
         self.operators = ['=', '!=', '<', '<=', '>', '>=', 'LIKE', 'IN', 'CONTAINS']
+
+    def _build_nested_fields(self):
+        """Build a dictionary of nested field completions."""
+        nested_fields = {}
+
+        for col in self.df.columns:
+            # Sample the first non-null value to check if it's a dict
+            sample = None
+            for val in self.df[col].dropna():
+                if isinstance(val, dict):
+                    sample = val
+                    break
+
+            if sample:
+                # Get keys from the dictionary
+                nested_fields[col] = list(sample.keys())
+
+        return nested_fields
 
     def get_completions(self, document, complete_event):
         """Generate completions based on current context."""
@@ -63,15 +83,34 @@ class PRCompleter(Completer):
         # Complete field names after commands or operators
         prev_word = words[-2].upper() if len(words) >= 2 else ""
         if prev_word in ['HIST', 'PLOT', 'TREND', 'BAR', 'STATS', 'IDENTIFY', 'BY', 'VS', 'WHERE'] or any(op in prev_word for op in self.operators):
-            for field in self.fields:
-                if field.lower().startswith(last_word.lower()):
-                    yield Completion(field, start_position=-len(last_word))
+            # Handle nested field completion (user. -> user.login, user.id, etc.)
+            if '.' in last_word:
+                field_part, sub_part = last_word.rsplit('.', 1)
+                if field_part in self.nested_fields:
+                    for subfield in self.nested_fields[field_part]:
+                        nested_field = f"{field_part}.{subfield}"
+                        if nested_field.lower().startswith(last_word.lower()):
+                            yield Completion(nested_field, start_position=-len(last_word))
+            else:
+                # Regular field completion
+                for field in self.fields:
+                    if field.lower().startswith(last_word.lower()):
+                        yield Completion(field, start_position=-len(last_word))
 
-        # Complete operators after field names
-        if len(words) >= 2 and words[-2] in self.fields:
-            for op in self.operators:
-                if op.lower().startswith(last_word.lower()):
-                    yield Completion(op, start_position=-len(last_word))
+                # Also complete with nested field prefixes (user -> user.)
+                for field in self.nested_fields:
+                    if field.lower().startswith(last_word.lower()):
+                        yield Completion(f"{field}.", start_position=-len(last_word))
+
+        # Complete operators after field names (including nested fields)
+        if len(words) >= 2:
+            prev_field = words[-2]
+            is_valid_field = (prev_field in self.fields or
+                            ('.' in prev_field and prev_field.split('.')[0] in self.nested_fields))
+            if is_valid_field:
+                for op in self.operators:
+                    if op.lower().startswith(last_word.lower()):
+                        yield Completion(op, start_position=-len(last_word))
 
         # Complete values based on field type
         if len(words) >= 3 and words[-3] in self.fields:
