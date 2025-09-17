@@ -105,6 +105,9 @@ def test_parser_with_examples():
             "identify labels_assigned.label contains 'test'",  # dot notation
             "plot labels_assigned.confidence vs comments",
             "stats labels_assigned.label by state",
+            "identify user.login = 'YunKuiLu'",  # nested user field
+            "identify user.login contains 'spring'",  # nested field with contains
+            "plot user.id vs comments",  # nested field in plots
         ]
     }
 

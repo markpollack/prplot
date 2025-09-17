@@ -206,6 +206,10 @@ WHERE primary_label CONTAINS 'vector'
 -- List membership
 WHERE state IN ('open', 'closed')
 WHERE complexity IN ('high', 'medium')
+
+-- Nested field access
+WHERE user.login = 'YunKuiLu'
+WHERE user.login CONTAINS 'spring'
 ```
 
 ### Utility Commands
@@ -424,6 +428,10 @@ identify age_days where age_days > 90 and comments > 5
 # Boolean field queries (case-insensitive)
 identify soft_approval_detected = true
 identify is_draft = false
+
+# Nested field access with dot notation
+identify user.login = 'YunKuiLu'
+identify user.login contains 'spring'
 ```
 
 ### **EXPORT & SAVE - Data Export**
