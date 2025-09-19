@@ -13,11 +13,14 @@ prplot> save analysis.png
 
 ## Quick Start
 
-### For Development (Claude Code users)
+### For Development
 ```bash
 git clone https://github.com/markpollack/prplot.git
 cd prplot
-python -m prplot your_data.json
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python -m prplot all_prs_labeled.json  # Uses included sample data
 ```
 
 ### For End Users
