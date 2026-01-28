@@ -7,6 +7,7 @@ import numpy as np
 from typing import Dict, Any, List, Optional
 import re
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 
 class QueryEngine:
@@ -71,6 +72,9 @@ class QueryEngine:
         # Handle nested field access (e.g., labels_assigned.label)
         series = self._get_field_series(df, field)
 
+        # Resolve date literals
+        value = self._resolve_date_value(value)
+
         # Handle boolean conversion for string boolean values
         if series.dtype == 'bool' and isinstance(value, str):
             if value.lower() == 'true':
@@ -105,6 +109,32 @@ class QueryEngine:
         else:
             raise ValueError(f"Unknown comparison operator: {operator}")
 
+    def _resolve_date_value(self, value):
+        """Resolve relative date literals (now-30d) and ISO date strings to Timestamps."""
+        if not isinstance(value, str):
+            return value
+
+        # Relative date: now-30d, now-6M, now-1y, now-2w
+        m = re.match(r'^now-(\d+)([dwMy])$', value)
+        if m:
+            amount = int(m.group(1))
+            unit = m.group(2)
+            now = pd.Timestamp.now(tz='UTC')
+            if unit == 'd':
+                return now - pd.DateOffset(days=amount)
+            elif unit == 'w':
+                return now - pd.DateOffset(weeks=amount)
+            elif unit == 'M':
+                return now - relativedelta(months=amount)
+            elif unit == 'y':
+                return now - relativedelta(years=amount)
+
+        # Absolute ISO date string: '2025-01-01' or '2025-01-01T00:00:00'
+        if re.match(r'^\d{4}-\d{2}-\d{2}', value):
+            return pd.Timestamp(value, tz='UTC')
+
+        return value
+
     def _get_field_series(self, df: pd.DataFrame, field: str) -> pd.Series:
         """Get Series for field, handling nested access."""
         if '.' in field:
@@ -113,16 +143,10 @@ class QueryEngine:
             if parts[0] in df.columns:
                 series = df[parts[0]]
                 for part in parts[1:]:
-                    if part == 'label' and parts[0] == 'labels_assigned':
-                        # Special handling for labels_assigned.label
-                        return series.apply(
-                            lambda x: x[0]['label'] if isinstance(x, list) and len(x) > 0 else None
-                        )
-                    else:
-                        # Generic nested access
-                        series = series.apply(
-                            lambda x: x.get(part) if isinstance(x, dict) else None
-                        )
+                    # Generic nested access
+                    series = series.apply(
+                        lambda x: x.get(part) if isinstance(x, dict) else None
+                    )
                 return series
             else:
                 raise ValueError(f"Field not found: {parts[0]}")

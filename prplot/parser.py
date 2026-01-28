@@ -29,8 +29,11 @@ class QueryParser:
         # Field references (support dot notation like labels_assigned.label)
         field = identifier
 
+        # Relative date literal: now-30d, now-6M, now-1y, now-2w
+        date_relative = Combine(Literal("now") + Literal("-") + Word(nums) + Word("dwMy", exact=1))
+
         # Values
-        value = real | integer | string_literal | identifier
+        value = date_relative | real | integer | string_literal | identifier
 
         # Comparison operators
         eq_op = Literal("=") | Literal("==")
@@ -236,8 +239,8 @@ def test_parser():
         "HIST age_days WHERE state = 'open'",
         "PLOT comments VS age_days",
         "PLOT comments VS age_days WHERE state = 'open' AND comments > 5",
-        "TREND created_at_dt BY primary_label",
-        "BAR primary_label",
+        "TREND created_at_dt BY author",
+        "BAR author",
         "STATS age_days BY state WHERE time_bucket = '1-3 months'"
     ]
 

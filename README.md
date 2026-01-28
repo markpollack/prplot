@@ -7,7 +7,7 @@ $ prplot all_prs_labeled.json
 
 prplot> identify comments > 10
 prplot> plot comments vs age_days where age_days > 90 and comments > 5
-prplot> bar primary_label
+prplot> bar author
 prplot> save analysis.png
 ```
 
@@ -87,12 +87,14 @@ java -jar ~/community/github-collector/github-collector-cli/target/github-collec
 | `--max-issues N` | Limit total PRs collected |
 | `--dry-run` | Preview without writing |
 
-### ML Labels (Optional)
+### Labels
 
-The `labels_assigned` field provides ML-classified categories. Without this field:
-- All analysis features work normally
-- `primary_label` shows as None for uncategorized PRs
-- Filter by GitHub labels via `labels` field instead
+PRs include GitHub labels in the `labels` field (list of `{name, color, description}` objects). The enriched `label_names` field extracts just the name strings for easy querying:
+
+```bash
+prplot> bar label_names
+prplot> identify label_names CONTAINS 'bug'
+```
 
 ## Supported Plots & Queries
 
@@ -106,9 +108,10 @@ The `labels_assigned` field provides ML-classified categories. Without this fiel
 
 **Filtering:**
 - `WHERE state = 'open'` → SQL-style conditions
-- `WHERE age_days > 90 AND comments > 5` → Multiple conditions
-- `WHERE primary_label CONTAINS 'vector'` → Text search
+- `WHERE age_days > 90 AND comment_count > 5` → Multiple conditions
+- `WHERE label_names CONTAINS 'bug'` → Text search
 - `WHERE author LIKE '%spring%'` → Pattern matching
+- `WHERE created_at_dt > now-30d` → Relative date filtering
 
 **Investigation:**
 - **Click any plot point** → See PR# and details in popup
@@ -120,7 +123,7 @@ The `labels_assigned` field provides ML-classified categories. Without this fiel
 ### 1. **See What Data You Have**
 ```bash
 prplot> fields
-# Shows all available columns: age_days, state, comments, primary_label, etc.
+# Shows all available columns: age_days, state, comment_count, label_names, etc.
 ```
 
 ### 2. **Basic Distributions**
@@ -131,29 +134,32 @@ prplot> hist age_days
 # What's the mix of open vs closed?
 prplot> bar state
 
-# Which labels are most common?
-prplot> bar primary_label
+# Which authors are most active?
+prplot> bar author
 ```
 
 ### 3. **Filter with WHERE**
 ```bash
 # PRs with lots of activity
-prplot> hist comments where comments > 5
+prplot> hist comment_count where comment_count > 5
 
 # Older PRs only
 prplot> hist age_days where age_days > 90
 
+# PRs created in the last 30 days
+prplot> hist age_days where created_at_dt > now-30d
+
 # High-activity old PRs
-prplot> bar primary_label where age_days > 90 and comments > 3
+prplot> bar author where age_days > 90 and comment_count > 3
 ```
 
 ### 4. **Correlations**
 ```bash
 # Do older PRs get more comments?
-prplot> plot age_days vs comments
+prplot> plot age_days vs comment_count
 
 # Focus on active PRs
-prplot> plot age_days vs comments where comments > 2
+prplot> plot age_days vs comment_count where comment_count > 2
 
 # Activity vs age patterns
 prplot> plot activity_score vs age_days where age_days > 60
@@ -164,8 +170,8 @@ prplot> plot activity_score vs age_days where age_days > 60
 # PR creation over time
 prplot> trend created_at_dt
 
-# Broken down by label type
-prplot> trend created_at_dt by primary_label
+# Broken down by author
+prplot> trend created_at_dt by author
 
 # Focus on older PRs
 prplot> trend created_at_dt where age_days > 90
@@ -174,10 +180,10 @@ prplot> trend created_at_dt where age_days > 90
 ### 6. **Quick Stats**
 ```bash
 # Summary of comment activity
-prplot> stats comments
+prplot> stats comment_count
 
 # Broken down by state
-prplot> stats comments by state
+prplot> stats comment_count by state
 
 # Age analysis by complexity
 prplot> stats age_days by complexity
@@ -186,7 +192,7 @@ prplot> stats age_days by complexity
 ### 7. **Identify Specific PRs**
 ```bash
 # Find high-activity PRs
-prplot> identify comments > 10
+prplot> identify comment_count > 10
 
 # Find old open PRs
 prplot> identify state = 'open' and age_days > 200
@@ -195,7 +201,10 @@ prplot> identify state = 'open' and age_days > 200
 prplot> identify age_days < 30 and activity_score > 10
 
 # Find PRs from specific contributors
-prplot> identify user.login in ('sunyuhan1998', 'quaff', 'wilocu')
+prplot> identify author in ('sunyuhan1998', 'quaff', 'wilocu')
+
+# Find PRs updated in the last week
+prplot> identify updated_at_dt > now-7d
 
 # Results shown in table with clickable "View PR" links
 ```
@@ -206,7 +215,7 @@ prplot> identify user.login in ('sunyuhan1998', 'quaff', 'wilocu')
 prplot> save pr_analysis.png
 
 # Export filtered data
-prplot> export where primary_label = 'MCP' to mcp_prs.json
+prplot> export where label_names CONTAINS 'MCP' to mcp_prs.json
 
 # All old open PRs
 prplot> export where state = 'open' and age_days > 180 to stale_prs.json
@@ -223,22 +232,22 @@ prplot> export where state = 'open' and age_days > 365 to very_old_prs.json
 
 ### **Activity Analysis**
 ```bash
-prplot> plot comments vs age_days where state = 'open'
+prplot> plot comment_count vs age_days where state = 'open'
 prplot> hist activity_score where state = 'open'
-prplot> stats comments by primary_label
+prplot> stats comment_count by author
 ```
 
 ### **Label Deep Dive**
 ```bash
-prplot> bar primary_label
-prplot> trend created_at_dt by primary_label where age_days < 180
-prplot> stats age_days by primary_label where state = 'open'
+prplot> bar label_names
+prplot> trend created_at_dt by author where age_days < 180
+prplot> stats age_days by author where state = 'open'
 ```
 
 ### **Complexity Patterns**
 ```bash
 prplot> bar complexity
-prplot> plot complexity vs comments where state = 'open'
+prplot> plot complexity vs comment_count where state = 'open'
 prplot> stats age_days by complexity where state = 'open'
 ```
 
@@ -250,8 +259,8 @@ prplot> stats age_days by complexity where state = 'open'
 |---------|-------------|---------|
 | `HIST field` | Histogram of field values | `hist age_days` |
 | `PLOT x [VS y]` | Scatter plot or line plot | `plot comments vs age_days` |
-| `TREND field [BY group]` | Time series trend | `trend created_at_dt by primary_label` |
-| `BAR field [BY group]` | Bar chart | `bar primary_label` |
+| `TREND field [BY group]` | Time series trend | `trend created_at_dt by author` |
+| `BAR field [BY group]` | Bar chart | `bar author` |
 | `STATS field [BY group]` | Statistical summary | `stats comments by state` |
 
 ### WHERE Clause Syntax
@@ -262,24 +271,58 @@ All plot commands support SQL-style WHERE clauses:
 -- Equality and comparison
 WHERE state = 'open'
 WHERE age_days > 90
-WHERE comments >= 5
+WHERE comment_count >= 5
 
 -- Boolean operators
-WHERE state = 'open' AND comments > 5
-WHERE age_days > 180 OR total_reactions > 10
+WHERE state = 'open' AND comment_count > 5
+WHERE age_days > 180 OR activity_score > 10
 
 -- String matching
 WHERE author LIKE '%spring%'
-WHERE primary_label CONTAINS 'vector'
+WHERE label_names CONTAINS 'bug'
 
 -- List membership (IN operator)
 WHERE state IN ('open', 'closed')
 WHERE complexity IN ('high', 'medium')
-WHERE user.login IN ('sunyuhan1998', 'quaff', 'wilocu')
+WHERE author IN ('sunyuhan1998', 'quaff', 'wilocu')
 
--- Nested field access
-WHERE user.login = 'YunKuiLu'
-WHERE user.login CONTAINS 'spring'
+-- Relative dates (Grafana-style)
+WHERE created_at_dt > now-30d
+WHERE updated_at_dt < now-6M
+
+-- Absolute dates (quoted ISO strings)
+WHERE created_at_dt > '2025-01-01'
+WHERE created_at_dt > '2025-06-15T00:00:00'
+```
+
+### Date Filtering
+
+prplot supports Grafana-style relative date literals for filtering by date fields (`created_at_dt`, `updated_at_dt`, `closed_at_dt`). No quotes needed.
+
+**Relative dates** (`now-<amount><unit>`):
+
+| Unit | Meaning | Example |
+|------|---------|---------|
+| `d` | days | `now-30d` — 30 days ago |
+| `w` | weeks | `now-2w` — 2 weeks ago |
+| `M` | months | `now-6M` — 6 months ago |
+| `y` | years | `now-1y` — 1 year ago |
+
+```bash
+# PRs created in the last 30 days
+prplot> hist age_days where created_at_dt > now-30d
+
+# PRs not updated in 6+ months
+prplot> identify updated_at_dt < now-6M
+
+# PRs from the last year
+prplot> trend created_at_dt where created_at_dt > now-1y
+```
+
+**Absolute dates** (quoted ISO strings):
+```bash
+prplot> identify created_at_dt > '2025-01-01'
+prplot> hist age_days where created_at_dt > '2025-06-15'
 ```
 
 ### Utility Commands
@@ -305,18 +348,16 @@ The tool automatically enriches your PR data with computed fields:
 ### Complexity Fields
 - `body_length` - Length of PR description
 - `complexity` - Estimated complexity ("low", "medium", "high")
-- `github_label_count` - Number of GitHub labels
-- `assigned_label_count` - Number of machine-assigned labels
+- `label_count` - Number of GitHub labels
 
 ### Label Fields
-- `assigned_label_names` - List of assigned label names
-- `github_label_names` - List of GitHub label names
-- `primary_label` - Highest confidence assigned label
+- `label_names` - List of GitHub label name strings
 
 ### Activity Fields
-- `total_reactions` - Sum of all reaction types
-- `activity_score` - Comments + reactions
-- `author` - PR author username
+- `comment_count` - Number of comments
+- `activity_score` - Same as comment_count
+- `author` - PR author login
+- `author_login` - PR author login (alias)
 
 ## Example Analysis Session
 
@@ -334,15 +375,15 @@ prplot> hist age_days where state = 'open'
 [Histogram of open PR ages]
 
 prplot> # Correlation analysis
-prplot> plot comments vs age_days where state = 'open'
+prplot> plot comment_count vs age_days where state = 'open'
 [Scatter plot with trend line]
 
-prplot> # Time trends by category
-prplot> trend created_at_dt by primary_label
+prplot> # Time trends by author
+prplot> trend created_at_dt by author
 [Multi-line time series plot]
 
 prplot> # Export data for further analysis
-prplot> export where primary_label = 'MCP' to mcp_prs.json
+prplot> export where label_names CONTAINS 'MCP' to mcp_prs.json
 Exported 23 PRs to mcp_prs.json
 
 prplot> # Save visualization
@@ -362,10 +403,10 @@ The tool expects JSON files with the structure:
       "title": "fix: mcp server registration tools failed",
       "state": "open",
       "created_at": "2025-09-15T16:43:43Z",
-      "labels_assigned": [
-        {"label": "MCP", "confidence": 1.0}
-      ],
-      // ... other GitHub API fields
+      "author": {"login": "username", "name": "Full Name"},
+      "comments": [{"author": {"login": "..."}, "body": "...", "created_at": "..."}],
+      "labels": [{"name": "bug", "color": "d73a4a", "description": "..."}]
+      // ... other fields
     }
   ]
 }
@@ -375,10 +416,10 @@ The tool expects JSON files with the structure:
 
 ### Tab Completion
 - Field names, commands, and operators auto-complete
-- **Nested field completion**: Type `user.` and get `login`, `id`, `node_id` suggestions
+- **Nested field completion**: Type a dict column name + `.` for subfield suggestions
 - Context-aware suggestions based on field types
 - Sample values for categorical fields
-- Smart completion for nested objects like `user.login`, `reactions.total_count`
+- Smart completion for nested objects
 
 ### Command History
 - Previous commands saved across sessions
@@ -411,40 +452,40 @@ The tool expects JSON files with the structure:
 hist age_days
 
 # Comment activity distribution
-hist comments
+hist comment_count
 
 # Filter for active PRs only
-hist age_days where comments > 5
+hist age_days where comment_count > 5
 
 # Focus on older PRs
-hist comments where age_days > 90 and comments > 0
+hist comment_count where age_days > 90 and comment_count > 0
 ```
 
 ### **PLOT - Interactive Scatter Plots**
 ```bash
 # Age vs comment correlation
-plot age_days vs comments
+plot age_days vs comment_count
 
 # Activity score over time
 plot age_days vs activity_score
 
 # High-activity subset (click points to see PR#!)
-plot age_days vs comments where comments > 5
+plot age_days vs comment_count where comment_count > 5
 
-# Complex filtering
-plot age_days vs total_reactions where age_days > 60 and comments > 2
+# PRs created in the last 6 months
+plot age_days vs comment_count where created_at_dt > now-6M
 ```
 
 ### **BAR - Category Breakdowns**
 ```bash
-# Label distribution
-bar primary_label
+# Author distribution
+bar author
 
 # Age category breakdown
 bar time_bucket
 
-# Labels for active PRs only
-bar primary_label where comments > 3
+# Authors for active PRs only
+bar author where comment_count > 3
 
 # Complexity distribution for older PRs
 bar complexity where age_days > 90
@@ -455,8 +496,8 @@ bar complexity where age_days > 90
 # PR creation over time
 trend created_at_dt
 
-# Creation trends by label category
-trend created_at_dt by primary_label
+# Creation trends by author
+trend created_at_dt by author
 
 # Focus on recent activity
 trend created_week where age_days < 120
@@ -468,31 +509,31 @@ trend created_month by complexity where age_days > 30
 ### **STATS - Statistical Summaries**
 ```bash
 # Overall comment statistics
-stats comments
+stats comment_count
 
 # Age breakdown by complexity
 stats age_days by complexity
 
-# Activity analysis by label
-stats activity_score by primary_label
+# Activity analysis by author
+stats activity_score by author
 
 # Comment patterns for older PRs
-stats comments by time_bucket where age_days > 60
+stats comment_count by time_bucket where age_days > 60
 ```
 
 ### **IDENTIFY - Find Specific PRs**
 ```bash
 # High-activity PRs
-identify comments > 10
+identify comment_count > 10
 
 # Old PRs with ongoing discussion
-identify age_days > 200 and comments > 3
+identify age_days > 200 and comment_count > 3
 
 # Recent high-engagement PRs
 identify age_days < 60 and activity_score > 15
 
 # Label-specific investigation
-identify primary_label contains 'vector' and comments > 2
+identify label_names contains 'bug' and comment_count > 2
 
 # Alternative WHERE syntax (both forms work identically)
 identify age_days where age_days > 90 and comments > 5
@@ -501,25 +542,25 @@ identify age_days where age_days > 90 and comments > 5
 identify soft_approval_detected = true
 identify is_draft = false
 
-# Nested field access with dot notation
-identify user.login = 'YunKuiLu'
-identify user.login contains 'spring'
-
 # Multiple value matching with IN operator
-identify user.login in ('sunyuhan1998', 'quaff', 'wilocu')
+identify author in ('sunyuhan1998', 'quaff', 'wilocu')
 identify state in ('open', 'closed')
+
+# Date-based filtering
+identify created_at_dt > now-30d
+identify updated_at_dt < now-6M
 ```
 
 ### **EXPORT & SAVE - Data Export**
 ```bash
 # Export high-activity PRs
-export where comments > 5 to active_prs.json
+export where comment_count > 5 to active_prs.json
 
 # Export old PRs with discussion
-export where age_days > 180 and comments > 2 to old_active_prs.json
+export where age_days > 180 and comment_count > 2 to old_active_prs.json
 
-# Export label-specific data
-export where primary_label contains 'vector' to vector_prs.json
+# Export recent PRs
+export where created_at_dt > now-30d to recent_prs.json
 
 # Save current plot
 save correlation_analysis.png
@@ -528,10 +569,8 @@ save correlation_analysis.png
 ### **Tab Completion Examples**
 ```bash
 # Type and press TAB for completions:
-plot user<TAB>          # → user, user.
-plot user.<TAB>         # → user.login, user.id, user.node_id, user.avatar_url...
-plot user.lo<TAB>       # → user.login
-identify reactions.<TAB> # → reactions.total_count, reactions.+1, reactions.-1...
+plot au<TAB>            # → author, author_login
+hist com<TAB>           # → comment_count, comments, complexity
 ```
 
 ### **Field Reference**
@@ -539,10 +578,11 @@ identify reactions.<TAB> # → reactions.total_count, reactions.+1, reactions.-1
 - `age_days`, `days_since_update` - Time calculations
 - `time_bucket` - "< 1 month", "1-3 months", etc.
 - `complexity` - "low", "medium", "high"
-- `activity_score` - comments + reactions
-- `primary_label` - Main assigned label
-- `author` - PR creator
-- `total_reactions` - Sum of all reaction types
+- `comment_count` - Number of comments
+- `activity_score` - Same as comment_count
+- `label_count` - Number of labels
+- `label_names` - List of label name strings
+- `author` - PR author login
 
 ## Dependencies
 

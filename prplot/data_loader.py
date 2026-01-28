@@ -6,7 +6,6 @@ import json
 import pandas as pd
 from datetime import datetime, timezone
 from typing import Dict, Any, List
-import re
 
 
 class PRDataLoader:
@@ -45,10 +44,10 @@ class PRDataLoader:
         """Add time-based computed fields."""
         now = datetime.now(timezone.utc)
 
-        # Convert timestamps to datetime
-        self.df['created_at_dt'] = pd.to_datetime(self.df['created_at'])
-        self.df['updated_at_dt'] = pd.to_datetime(self.df['updated_at'])
-        self.df['closed_at_dt'] = pd.to_datetime(self.df['closed_at'])
+        # Convert timestamps to datetime (assume UTC if no timezone info)
+        self.df['created_at_dt'] = pd.to_datetime(self.df['created_at'], utc=True)
+        self.df['updated_at_dt'] = pd.to_datetime(self.df['updated_at'], utc=True)
+        self.df['closed_at_dt'] = pd.to_datetime(self.df['closed_at'], utc=True)
 
         # Age calculations
         self.df['age_days'] = (now - self.df['created_at_dt']).dt.days
@@ -79,13 +78,8 @@ class PRDataLoader:
         # Body length as complexity proxy
         self.df['body_length'] = self.df['body'].fillna('').str.len()
 
-        # Label count
-        self.df['github_label_count'] = self.df['labels'].apply(
-            lambda x: len(x) if isinstance(x, list) else 0
-        )
-
-        # Assigned labels count
-        self.df['assigned_label_count'] = self.df['labels_assigned'].apply(
+        # Label count from labels list
+        self.df['label_count'] = self.df['labels'].apply(
             lambda x: len(x) if isinstance(x, list) else 0
         )
 
@@ -97,9 +91,7 @@ class PRDataLoader:
             elif row['body_length'] > 500:
                 score += 1
 
-            if row['github_label_count'] > 3:
-                score += 1
-            if row['assigned_label_count'] > 1:
+            if row['label_count'] > 3:
                 score += 1
 
             if score >= 3:
@@ -113,49 +105,30 @@ class PRDataLoader:
 
     def _add_label_fields(self):
         """Add label-related fields."""
-        # Extract assigned label names for easier querying
-        def extract_label_names(labels_assigned):
-            if not isinstance(labels_assigned, list):
-                return []
-            return [label.get('label', '') for label in labels_assigned]
-
-        self.df['assigned_label_names'] = self.df['labels_assigned'].apply(extract_label_names)
-
-        # Extract GitHub label names
-        def extract_github_label_names(labels):
+        # Extract label names from labels list (github-collector schema: [{name, color, description}])
+        def extract_label_names(labels):
             if not isinstance(labels, list):
                 return []
             return [label.get('name', '') for label in labels]
 
-        self.df['github_label_names'] = self.df['labels'].apply(extract_github_label_names)
-
-        # Primary assigned label (highest confidence)
-        def primary_label(labels_assigned):
-            if not isinstance(labels_assigned, list) or len(labels_assigned) == 0:
-                return None
-            return max(labels_assigned, key=lambda x: x.get('confidence', 0)).get('label', None)
-
-        self.df['primary_label'] = self.df['labels_assigned'].apply(primary_label)
+        self.df['label_names'] = self.df['labels'].apply(extract_label_names)
 
     def _add_activity_fields(self):
         """Add activity and engagement fields."""
-        # Extract reaction counts
-        def extract_reactions(reactions):
-            if not isinstance(reactions, dict):
-                return 0
-            total = 0
-            for key, value in reactions.items():
-                if key != 'url' and isinstance(value, (int, float)):
-                    total += value
-            return total
+        # comments is a list of comment objects — compute count
+        self.df['comment_count'] = self.df['comments'].apply(
+            lambda x: len(x) if isinstance(x, list) else 0
+        )
 
-        self.df['total_reactions'] = self.df['reactions'].apply(extract_reactions)
+        # Activity score based on comment count
+        self.df['activity_score'] = self.df['comment_count']
 
-        # Activity score combining comments and reactions
-        self.df['activity_score'] = self.df['comments'].fillna(0).astype(int) + self.df['total_reactions']
-
-        # Author info
-        self.df['author'] = self.df['user'].apply(lambda x: x.get('login', '') if isinstance(x, dict) else '')
+        # Author login extracted from author dict
+        self.df['author_login'] = self.df['author'].apply(
+            lambda x: x.get('login', '') if isinstance(x, dict) else ''
+        )
+        # Overwrite author column with login string for easy querying
+        self.df['author'] = self.df['author_login']
 
         # Draft status
         self.df['is_draft'] = self.df['draft'].fillna(False)
@@ -163,25 +136,24 @@ class PRDataLoader:
     def _optimize_dtypes(self):
         """Optimize DataFrame data types for memory efficiency."""
         # Convert categorical fields (only if they contain strings/simple types)
-        categorical_fields = ['state', 'time_bucket', 'complexity', 'primary_label', 'author']
+        categorical_fields = ['state', 'time_bucket', 'complexity', 'author']
         for field in categorical_fields:
             if field in self.df.columns:
                 try:
-                    # Only convert if all values are string-like or None
                     sample_vals = self.df[field].dropna().head(10)
                     if all(isinstance(v, (str, type(None))) for v in sample_vals):
                         self.df[field] = self.df[field].astype('category')
                 except:
-                    pass  # Skip if conversion fails
+                    pass
 
         # Convert boolean fields
-        bool_fields = ['is_draft', 'locked']
+        bool_fields = ['is_draft']
         for field in bool_fields:
             if field in self.df.columns:
                 try:
                     self.df[field] = self.df[field].astype('bool')
                 except:
-                    pass  # Skip if conversion fails
+                    pass
 
     def get_field_info(self) -> Dict[str, Any]:
         """Return information about available fields for tab completion."""
@@ -193,7 +165,7 @@ class PRDataLoader:
             try:
                 unique_count = self.df[col].nunique()
             except:
-                unique_count = 0  # Can't compute for unhashable types
+                unique_count = 0
 
             try:
                 if unique_count < 20 and unique_count > 0:
@@ -202,7 +174,7 @@ class PRDataLoader:
                         if isinstance(val, (str, int, float, bool)) or val is None:
                             sample_values.append(val)
                         else:
-                            sample_values.append(str(val)[:50])  # Truncate complex objects
+                            sample_values.append(str(val)[:50])
                 else:
                     sample_values = []
             except:

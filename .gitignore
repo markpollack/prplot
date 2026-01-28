@@ -37,9 +37,13 @@ ENV/
 *~
 .DS_Store
 
+# Environment / secrets
+.env
+
 # Project specific
 .claude/
 *.log
+prs/
 
 # Data files (these can be large and user-specific)
 !example*.json

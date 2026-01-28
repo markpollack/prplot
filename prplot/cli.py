@@ -127,9 +127,10 @@ class PRCompleter(Completer):
 class PRAnalysisCLI:
     """Interactive CLI for PR data analysis."""
 
-    def __init__(self, json_file: str):
+    def __init__(self, json_file: str, plain: bool = False):
         """Initialize CLI with data file."""
-        self.console = Console()
+        self.plain = plain
+        self.console = Console(no_color=True, highlight=False) if plain else Console()
 
         try:
             self.data_loader = PRDataLoader(json_file)
@@ -137,11 +138,10 @@ class PRAnalysisCLI:
             self.query_engine = QueryEngine(self.data_loader.get_data())
             self.visualizer = Visualizer()
 
-            self.completer = PRCompleter(self.data_loader)
-
-            # Set up history file
-            history_file = os.path.expanduser("~/.prplot_history")
-            self.history = FileHistory(history_file)
+            if not plain:
+                self.completer = PRCompleter(self.data_loader)
+                history_file = os.path.expanduser("~/.prplot_history")
+                self.history = FileHistory(history_file)
 
         except Exception as e:
             self.console.print(f"[red]Error loading data: {e}[/red]")
@@ -153,13 +153,15 @@ class PRAnalysisCLI:
 
         while True:
             try:
-                # Get user input with completion and history
-                query = prompt(
-                    "prplot> ",
-                    completer=self.completer,
-                    history=self.history,
-                    complete_while_typing=True
-                ).strip()
+                if self.plain:
+                    query = input("prplot> ").strip()
+                else:
+                    query = prompt(
+                        "prplot> ",
+                        completer=self.completer,
+                        history=self.history,
+                        complete_while_typing=True
+                    ).strip()
 
                 if not query:
                     continue
@@ -213,9 +215,11 @@ class PRAnalysisCLI:
 [blue]WHERE Clause Examples:[/blue]
   WHERE state = 'open'
   WHERE age_days > 90 AND comments > 5
-  WHERE primary_label CONTAINS 'vector'
+  WHERE label_names CONTAINS 'vector'
   WHERE author LIKE '%spring%'
   WHERE state IN ('open', 'closed')
+  WHERE created_at_dt > now-30d
+  WHERE updated_at_dt < now-6M
 
 [blue]Utility Commands:[/blue]
   fields                                 - Show available fields
@@ -228,8 +232,8 @@ class PRAnalysisCLI:
 [blue]Example Queries:[/blue]
   hist age_days
   plot comments vs age_days where state = 'open'
-  trend created_at_dt by primary_label
-  bar primary_label where time_bucket = '1-3 months'
+  trend created_at_dt by author
+  bar label_names where time_bucket = '1-3 months'
   stats comments by state
 """
         self.console.print(help_text)
@@ -346,7 +350,7 @@ class PRAnalysisCLI:
                     str(row['title'])[:47] + "..." if len(str(row['title'])) > 50 else str(row['title']),
                     str(row['state']),
                     str(row['age_days']),
-                    str(row['comments'])
+                    str(row['comment_count'])
                 )
 
             self.console.print(table)
@@ -367,16 +371,21 @@ class PRAnalysisCLI:
 
 def main():
     """Main entry point."""
-    if len(sys.argv) != 2:
-        print("Usage: python -m prplot <json_file>")
+    args = sys.argv[1:]
+    plain = "--plain" in args
+    if plain:
+        args.remove("--plain")
+
+    if len(args) != 1:
+        print("Usage: python -m prplot [--plain] <json_file>")
         sys.exit(1)
 
-    json_file = sys.argv[1]
+    json_file = args[0]
     if not os.path.exists(json_file):
         print(f"Error: File {json_file} not found")
         sys.exit(1)
 
-    cli = PRAnalysisCLI(json_file)
+    cli = PRAnalysisCLI(json_file, plain=plain)
     cli.run()
 
 
