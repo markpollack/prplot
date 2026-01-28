@@ -2,24 +2,11 @@
 
 Interactive command-line tool for exploring GitHub Pull Request data using SQL-style queries. Type a one-liner, get a plot or table. The repo includes a snapshot of all open Spring AI PRs so you can start immediately.
 
-## Install and Try (macOS)
+## Quick Start
 
-### Prerequisites
+The repo includes a bundled PR data snapshot — no GitHub token, no jbang, no JDK needed. Just Python and git.
 
-You need Python 3.10+ and git. macOS ships with git but not always a recent Python. Check with:
-
-```bash
-python3 --version
-git --version
-```
-
-If `python3` is missing or older than 3.10, install it with [Homebrew](https://brew.sh/):
-
-```bash
-brew install python@3.12
-```
-
-### Step 1: Clone and set up
+**Prerequisites**: Python 3.10+ and git. If `python3 --version` shows older than 3.10 (or is missing), install with [Homebrew](https://brew.sh/): `brew install python@3.12`
 
 ```bash
 git clone https://github.com/markpollack/prplot.git
@@ -27,43 +14,35 @@ cd prplot
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-```
-
-You should see packages installing (pandas, matplotlib, etc.). When it finishes without errors, you're ready.
-
-### Step 2: Launch
-
-```bash
 python -m prplot data/spring-ai-open-prs.json
 ```
 
 You should see:
 
 ```
-PR Analysis CLI
-SQL-style queries for GitHub PR data exploration
 Loaded 283 PRs
-
 Type 'help' for commands, 'fields' for available fields, 'quit' to exit
 ```
 
-### Step 3: Try these queries
-
-Copy-paste each line at the `prplot>` prompt. Close each plot window to return to the prompt.
+Try a few queries at the `prplot>` prompt (close each plot window to return):
 
 ```bash
-# Who is submitting PRs?
 prplot> bar author
-
-# How old are the open PRs?
 prplot> hist age_days
-
-# Age vs comment activity (click points to see PR#)
 prplot> plot age_days vs comment_count
-
-# PRs older than 6 months with no comments
 prplot> identify age_days > 180 AND comment_count = 0
+prplot> quit
+```
 
+> **Tip**: prplot has tab completion — type a few letters and press Tab. Arrow keys scroll through command history.
+
+When done, type `quit` to exit prplot, then `deactivate` at your shell prompt to leave the virtual environment. Next time: `cd prplot && source venv/bin/activate && python -m prplot data/spring-ai-open-prs.json`.
+
+## More Examples
+
+Copy-paste these at the `prplot>` prompt for deeper exploration:
+
+```bash
 # PRs created in the last 30 days
 prplot> identify created_at_dt > now-30d
 
@@ -84,20 +63,7 @@ prplot> identify $core AND $recent
 
 # Recent external contributor PRs (last week)
 prplot> identify $external AND $fresh
-
-# Done
-prplot> quit
 ```
-
-> **Tip**: prplot has tab completion — type a few letters and press Tab. Arrow keys scroll through command history.
-
-### Step 4: Deactivate when done
-
-```bash
-deactivate
-```
-
-Next time, just `cd prplot && source venv/bin/activate && python -m prplot data/spring-ai-open-prs.json`.
 
 ## Refreshing PR Data
 
@@ -124,7 +90,9 @@ jbang catalog add --name=github-collector \
   https://raw.githubusercontent.com/spring-ai-community/github-collector/main/jbang-catalog.json
 ```
 
-This registers the `collect@github-collector` alias. jbang will download and cache the Java code automatically on first run — you don't need Maven, Gradle, or a JDK installed separately.
+This registers the `collect@github-collector` alias. jbang will download and cache the Java code automatically on first run — you don't need Maven or Gradle installed separately.
+
+> **Important**: github-collector requires **JDK 17**. If your default JDK is newer (e.g. 21 or 25), you may hit compilation errors. Check with `java -version` and switch to 17 if needed (e.g. `export JAVA_HOME=$(/usr/libexec/java_home -v 17)` on macOS).
 
 **Step 3: Set your GitHub token**
 
