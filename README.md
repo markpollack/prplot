@@ -31,6 +31,69 @@ prplot your_data.json
 
 > **Note**: Examples below use Spring AI PR data where all PRs happen to be open. For mixed datasets with open/closed PRs, use `WHERE state = 'open'` or `WHERE state = 'closed'` to filter as needed.
 
+## Refreshing PR Data
+
+prplot analyzes GitHub PR data exported as JSON. Use the [github-collector](https://github.com/spring-ai-community/github-collector) CLI to fetch fresh data.
+
+### Prerequisites
+
+1. **GitHub Token**: Export `GITHUB_TOKEN` environment variable
+2. **Build github-collector** (one-time):
+   ```bash
+   cd ~/community/github-collector
+   mvn clean package -DskipTests
+   ```
+
+### Quick Refresh
+
+```bash
+export GITHUB_TOKEN=your_token_here
+
+java -jar ~/community/github-collector/github-collector-cli/target/github-collector-cli-1.0.0-SNAPSHOT.jar \
+    --repo spring-projects/spring-ai \
+    --type prs \
+    --pr-state open \
+    --single-file \
+    -o all_prs.json
+
+# Then run prplot
+python -m prplot all_prs.json
+```
+
+### Incremental Updates
+
+Add new PRs without re-fetching everything:
+
+```bash
+java -jar ~/community/github-collector/github-collector-cli/target/github-collector-cli-1.0.0-SNAPSHOT.jar \
+    --repo spring-projects/spring-ai \
+    --type prs \
+    --pr-state open \
+    --single-file \
+    --incremental \
+    --no-clean \
+    -o all_prs.json
+```
+
+### Collection Options
+
+| Option | Description |
+|--------|-------------|
+| `--pr-state` | `open`, `closed`, `merged`, or `all` |
+| `--single-file` | Output to single consolidated file |
+| `-o, --output` | Output file path |
+| `--incremental` | Skip already collected PRs |
+| `--no-clean` | Keep existing data, append new |
+| `--max-issues N` | Limit total PRs collected |
+| `--dry-run` | Preview without writing |
+
+### ML Labels (Optional)
+
+The `labels_assigned` field provides ML-classified categories. Without this field:
+- All analysis features work normally
+- `primary_label` shows as None for uncategorized PRs
+- Filter by GitHub labels via `labels` field instead
+
 ## Supported Plots & Queries
 
 **Plot Types:**
