@@ -1,0 +1,3 @@
+# Load all Spring AI cuts
+source cuts/spring-ai-core.prplot
+source cuts/spring-ai-triage.prplot

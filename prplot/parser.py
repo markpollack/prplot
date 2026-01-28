@@ -49,11 +49,17 @@ class QueryParser:
         comparison_op = (eq_op | ne_op | le_op | ge_op | lt_op | gt_op |
                         like_op | in_op | contains_op)
 
+        # Negated operators: NOT IN, NOT LIKE, NOT CONTAINS
+        not_in_op = CaselessKeyword("NOT") + CaselessKeyword("IN")
+        not_like_op = CaselessKeyword("NOT") + CaselessKeyword("LIKE")
+        not_contains_op = CaselessKeyword("NOT") + CaselessKeyword("CONTAINS")
+
         # List for IN operator
         value_list = Literal("(") + Group(value + ZeroOrMore(Literal(",") + value)) + Literal(")")
 
-        # Comparison expressions
-        comparison = Group(field + comparison_op + (value_list | value))
+        # Comparison expressions (negated operators tried first)
+        neg_comparison = Group(field + (not_in_op | not_like_op | not_contains_op) + (value_list | value))
+        comparison = neg_comparison | Group(field + comparison_op + (value_list | value))
 
         # Boolean expressions with AND/OR
         bool_expr = infixNotation(
@@ -172,6 +178,28 @@ class QueryParser:
             where_result = where_result.asList()
 
         if isinstance(where_result, list):
+            # Handle NOT (unary): ['NOT', operand]
+            if (len(where_result) == 2 and
+                isinstance(where_result[0], str) and
+                where_result[0].upper() == 'NOT'):
+                return {
+                    'type': 'not',
+                    'operand': self._interpret_where_result(where_result[1])
+                }
+
+            # Handle negated operators: [field, 'NOT', 'IN'/'LIKE'/'CONTAINS', ...]
+            if (len(where_result) >= 4 and
+                isinstance(where_result[0], str) and
+                isinstance(where_result[1], str) and
+                where_result[1].upper() == 'NOT' and
+                isinstance(where_result[2], str) and
+                where_result[2].upper() in ('IN', 'LIKE', 'CONTAINS')):
+                # Strip 'NOT' and interpret the rest as a positive comparison
+                positive = self._interpret_where_result(
+                    [where_result[0]] + where_result[2:]
+                )
+                return {'type': 'not', 'operand': positive}
+
             # Handle IN operator: [field, 'IN', '(', [val1, ',', val2, ...], ')']
             if (len(where_result) >= 5 and
                 isinstance(where_result[0], str) and

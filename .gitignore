@@ -47,6 +47,7 @@ prs/
 
 # Data files (these can be large and user-specific)
 !example*.json
+!data/
 
 # Plots and exports
 *.png

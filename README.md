@@ -1,80 +1,182 @@
 # prplot - PR Analysis CLI Tool
 
-**One-line commands to explore GitHub PR data** - inspired by ROOT/PAW but with SQL syntax.
+Interactive command-line tool for exploring GitHub Pull Request data using SQL-style queries. Type a one-liner, get a plot or table. The repo includes a snapshot of all open Spring AI PRs so you can start immediately.
+
+## Install and Try (macOS)
+
+### Prerequisites
+
+You need Python 3.10+ and git. macOS ships with git but not always a recent Python. Check with:
 
 ```bash
-$ prplot all_prs_labeled.json
-
-prplot> identify comments > 10
-prplot> plot comments vs age_days where age_days > 90 and comments > 5
-prplot> bar author
-prplot> save analysis.png
+python3 --version
+git --version
 ```
 
-## Quick Start
+If `python3` is missing or older than 3.10, install it with [Homebrew](https://brew.sh/):
 
-### For Development
+```bash
+brew install python@3.12
+```
+
+### Step 1: Clone and set up
+
 ```bash
 git clone https://github.com/markpollack/prplot.git
 cd prplot
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
-python -m prplot all_prs_labeled.json  # Uses included sample data
 ```
 
-### For End Users
+You should see packages installing (pandas, matplotlib, etc.). When it finishes without errors, you're ready.
+
+### Step 2: Launch
+
 ```bash
-pip install git+https://github.com/markpollack/prplot.git
-prplot your_data.json
+python -m prplot data/spring-ai-open-prs.json
 ```
 
-> **Note**: Examples below use Spring AI PR data where all PRs happen to be open. For mixed datasets with open/closed PRs, use `WHERE state = 'open'` or `WHERE state = 'closed'` to filter as needed.
+You should see:
 
-## Collecting PR Data
+```
+PR Analysis CLI
+SQL-style queries for GitHub PR data exploration
+Loaded 283 PRs
 
-prplot analyzes GitHub PR data exported as JSON. Use [github-collector](https://github.com/spring-ai-community/github-collector) to fetch data via [jbang](https://www.jbang.dev/) — no Java build required.
+Type 'help' for commands, 'fields' for available fields, 'quit' to exit
+```
 
-### Setup (one-time)
+### Step 3: Try these queries
+
+Copy-paste each line at the `prplot>` prompt. Close each plot window to return to the prompt.
 
 ```bash
-# 1. Install jbang (if not already installed)
+# Who is submitting PRs?
+prplot> bar author
+
+# How old are the open PRs?
+prplot> hist age_days
+
+# Age vs comment activity (click points to see PR#)
+prplot> plot age_days vs comment_count
+
+# PRs older than 6 months with no comments
+prplot> identify age_days > 180 AND comment_count = 0
+
+# PRs created in the last 30 days
+prplot> identify created_at_dt > now-30d
+
+# PRs not updated in 6 months
+prplot> identify updated_at_dt < now-6M
+
+# Label breakdown
+prplot> bar label_names
+
+# Load pre-defined cuts for the Spring AI team
+prplot> source cuts/spring-ai-all.prplot
+
+# External contributors with stale PRs
+prplot> identify $external AND $stale
+
+# Core team PRs from the last 30 days
+prplot> identify $core AND $recent
+
+# Recent external contributor PRs (last week)
+prplot> identify $external AND $fresh
+
+# Done
+prplot> quit
+```
+
+> **Tip**: prplot has tab completion — type a few letters and press Tab. Arrow keys scroll through command history.
+
+### Step 4: Deactivate when done
+
+```bash
+deactivate
+```
+
+Next time, just `cd prplot && source venv/bin/activate && python -m prplot data/spring-ai-open-prs.json`.
+
+## Refreshing PR Data
+
+The bundled `data/spring-ai-open-prs.json` is a point-in-time snapshot. To get current data, use [github-collector](https://github.com/spring-ai-community/github-collector) via [jbang](https://www.jbang.dev/) — no Java install or build required.
+
+### One-time setup
+
+**Step 1: Install jbang**
+
+```bash
 curl -Ls https://sh.jbang.dev | bash -s - app setup
+```
 
-# 2. Add the github-collector catalog
+After running, restart your terminal (or `source ~/.bashrc`) so that the `jbang` command is on your PATH. Verify with:
+
+```bash
+jbang --version
+```
+
+**Step 2: Add the github-collector catalog**
+
+```bash
 jbang catalog add --name=github-collector \
   https://raw.githubusercontent.com/spring-ai-community/github-collector/main/jbang-catalog.json
-
-# 3. Set your GitHub token
-export GITHUB_TOKEN=your_token_here
 ```
 
-### Quick Refresh
+This registers the `collect@github-collector` alias. jbang will download and cache the Java code automatically on first run — you don't need Maven, Gradle, or a JDK installed separately.
+
+**Step 3: Set your GitHub token**
+
+A [personal access token](https://github.com/settings/tokens) with `repo` scope is required to read PR data from the GitHub API.
 
 ```bash
-# Collect open PRs into a single file
-jbang collect@github-collector \
-    --type prs --pr-state open --single-file -o all_prs.json
-
-# Then analyze with prplot
-python -m prplot all_prs.json
+export GITHUB_TOKEN=ghp_your_token_here
 ```
 
-### Incremental Updates
+Add this to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) to persist it.
+
+### Full refresh
+
+Re-collect all open PRs from scratch, replacing the bundled snapshot:
 
 ```bash
 jbang collect@github-collector \
     --type prs --pr-state open --single-file \
-    --incremental --no-clean -o all_prs.json
+    -o data/spring-ai-open-prs.json
 ```
 
-### Getting Help
+Then analyze:
 
 ```bash
-jbang collect@github-collector --help
+python -m prplot data/spring-ai-open-prs.json
 ```
 
-This shows all available options including filtering, sorting, and output modes. See the [github-collector README](https://github.com/spring-ai-community/github-collector) for comprehensive examples.
+### Incremental update
+
+Only fetch PRs that changed since the last collection. This is faster and avoids hitting GitHub API rate limits on large repos:
+
+```bash
+jbang collect@github-collector \
+    --type prs --pr-state open --single-file \
+    --incremental --no-clean \
+    -o data/spring-ai-open-prs.json
+```
+
+- `--incremental` skips PRs whose `updated_at` hasn't changed since the last run.
+- `--no-clean` keeps previously collected PRs that are no longer returned (e.g. PRs that were closed since the last full refresh). Use a full refresh periodically to prune these.
+
+### Collecting from other repositories
+
+github-collector defaults to `spring-projects/spring-ai`. To analyze a different repo:
+
+```bash
+jbang collect@github-collector \
+    --repo owner/repo --type prs --pr-state open \
+    --single-file -o my-project-prs.json
+```
+
+Run `jbang collect@github-collector --help` for all options. See the [github-collector README](https://github.com/spring-ai-community/github-collector) for more examples.
 
 ### Labels
 
@@ -100,6 +202,7 @@ prplot> identify label_names CONTAINS 'bug'
 - `WHERE age_days > 90 AND comment_count > 5` → Multiple conditions
 - `WHERE label_names CONTAINS 'bug'` → Text search
 - `WHERE author LIKE '%spring%'` → Pattern matching
+- `WHERE author NOT IN ('alice', 'bob')` → Negated operators
 - `WHERE created_at_dt > now-30d` → Relative date filtering
 
 **Investigation:**
@@ -272,8 +375,12 @@ WHERE label_names CONTAINS 'bug'
 
 -- List membership (IN operator)
 WHERE state IN ('open', 'closed')
-WHERE complexity IN ('high', 'medium')
 WHERE author IN ('sunyuhan1998', 'quaff', 'wilocu')
+
+-- Negated operators (NOT IN, NOT LIKE, NOT CONTAINS)
+WHERE author NOT IN ('tzolov', 'markpollack')
+WHERE author NOT LIKE '%bot%'
+WHERE label_names NOT CONTAINS 'bug'
 
 -- Relative dates (Grafana-style)
 WHERE created_at_dt > now-30d
@@ -320,6 +427,7 @@ prplot> hist age_days where created_at_dt > '2025-06-15'
 |---------|-------------|
 | `fields` | Show all available fields with types |
 | `help` | Show command help |
+| `source <file>` | Execute commands from a `.prplot` file |
 | `save filename.png` | Save current plot to file |
 | `export WHERE ... TO file.json` | Export filtered data |
 | `quit` / `exit` | Exit the CLI |
@@ -414,6 +522,36 @@ The tool expects JSON files with the structure:
 - Previous commands saved across sessions
 - Use arrow keys to navigate history
 - History stored in `~/.prplot_history`
+
+### Sourcing Commands from Files
+
+Save frequently-used cuts and commands in `.prplot` files and load them with `source`:
+
+```bash
+prplot> source cuts/spring-ai-core.prplot
+Sourced 2 commands from cuts/spring-ai-core.prplot
+
+prplot> source cuts/spring-ai-triage.prplot
+Sourced 6 commands from cuts/spring-ai-triage.prplot
+
+prplot> identify $core AND $fresh
+```
+
+Lines starting with `#` are comments. Blank lines are skipped. Files can source other files.
+
+Auto-load a file on startup with `--init`:
+
+```bash
+python -m prplot --init cuts/spring-ai-all.prplot data/spring-ai-open-prs.json
+```
+
+The `cuts/` directory ships with ready-to-use cut definitions for Spring AI:
+
+| File | Contents |
+|------|----------|
+| `cuts/spring-ai-core.prplot` | Core team vs external contributor cuts |
+| `cuts/spring-ai-triage.prplot` | Time-based (fresh/stale/ancient) and activity cuts |
+| `cuts/spring-ai-all.prplot` | Sources both of the above |
 
 ### Auto-Plot Selection
 - Numeric fields → histograms or scatter plots

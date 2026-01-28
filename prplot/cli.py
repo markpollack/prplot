@@ -18,13 +18,15 @@ from .data_loader import PRDataLoader
 from .parser import QueryParser
 from .query_engine import QueryEngine
 from .visualizer import Visualizer
+from .cuts import CutRegistry
 
 
 class PRCompleter(Completer):
     """Custom completer for PR analysis queries."""
 
-    def __init__(self, data_loader: PRDataLoader):
+    def __init__(self, data_loader: PRDataLoader, cut_registry: CutRegistry = None):
         self.data_loader = data_loader
+        self.cut_registry = cut_registry
         self.field_info = data_loader.get_field_info()
         self.df = data_loader.get_data()
 
@@ -33,7 +35,8 @@ class PRCompleter(Completer):
             'HIST', 'PLOT', 'TREND', 'BAR', 'STATS', 'IDENTIFY',
             'WHERE', 'BY', 'VS', 'AND', 'OR', 'NOT',
             'LIKE', 'IN', 'CONTAINS', 'save', 'export',
-            'help', 'fields', 'quit', 'exit'
+            'help', 'fields', 'quit', 'exit',
+            'cut', 'uncut', 'cuts', 'source'
         ]
 
         # Field names (including nested fields)
@@ -73,6 +76,14 @@ class PRCompleter(Completer):
             return
 
         last_word = words[-1] if words else ""
+
+        # Complete $cut references
+        if last_word.startswith('$') and self.cut_registry:
+            prefix = last_word[1:]  # strip the $
+            for name in self.cut_registry.list_all():
+                if name.startswith(prefix):
+                    yield Completion(f"${name}", start_position=-len(last_word))
+            return
 
         # Complete commands at the start
         if len(words) == 1:
@@ -127,9 +138,10 @@ class PRCompleter(Completer):
 class PRAnalysisCLI:
     """Interactive CLI for PR data analysis."""
 
-    def __init__(self, json_file: str, plain: bool = False):
+    def __init__(self, json_file: str, plain: bool = False, init_file: str = None):
         """Initialize CLI with data file."""
         self.plain = plain
+        self.init_file = init_file
         self.console = Console(no_color=True, highlight=False) if plain else Console()
 
         try:
@@ -137,9 +149,10 @@ class PRAnalysisCLI:
             self.parser = QueryParser()
             self.query_engine = QueryEngine(self.data_loader.get_data())
             self.visualizer = Visualizer()
+            self.cut_registry = CutRegistry()
 
             if not plain:
-                self.completer = PRCompleter(self.data_loader)
+                self.completer = PRCompleter(self.data_loader, self.cut_registry)
                 history_file = os.path.expanduser("~/.prplot_history")
                 self.history = FileHistory(history_file)
 
@@ -150,6 +163,9 @@ class PRAnalysisCLI:
     def run(self):
         """Run the interactive CLI."""
         self._print_welcome()
+
+        if self.init_file:
+            self._handle_source(f"source {self.init_file}")
 
         while True:
             try:
@@ -166,23 +182,10 @@ class PRAnalysisCLI:
                 if not query:
                     continue
 
-                # Handle special commands
                 if query.lower() in ['quit', 'exit', 'q']:
                     break
-                elif query.lower() == 'help':
-                    self._show_help()
-                elif query.lower() == 'fields':
-                    self._show_fields()
-                elif query.lower().startswith('save '):
-                    filename = query[5:].strip()
-                    self.visualizer.save_plot(filename)
-                elif query.lower().startswith('export '):
-                    self._handle_export(query)
-                elif query.lower().startswith('identify '):
-                    self._handle_identify(query)
-                else:
-                    # Parse and execute query
-                    self._execute_query(query)
+
+                self._dispatch(query)
 
             except KeyboardInterrupt:
                 self.console.print("\n[yellow]Use 'quit' or 'exit' to leave[/yellow]")
@@ -192,6 +195,39 @@ class PRAnalysisCLI:
                 self.console.print(f"[red]Error: {e}[/red]")
 
         self.console.print("[green]Goodbye![/green]")
+
+    def _dispatch(self, query: str):
+        """Dispatch a single command."""
+        if query.lower() == 'help':
+            self._show_help()
+        elif query.lower() == 'fields':
+            self._show_fields()
+        elif query.lower() == 'cuts':
+            self._handle_cuts_list()
+        elif query.lower().startswith('cut '):
+            self._handle_cut_define(query)
+        elif query.lower().startswith('uncut '):
+            self._handle_cut_remove(query)
+        elif query.lower().startswith('source '):
+            self._handle_source(query)
+        elif query.lower().startswith('save '):
+            filename = query[5:].strip()
+            self.visualizer.save_plot(filename)
+        elif query.lower().startswith('export '):
+            self._handle_export(query)
+        else:
+            # Resolve $cut references before dispatch
+            if '$' in query:
+                try:
+                    query = self.cut_registry.resolve(query)
+                except ValueError as e:
+                    self.console.print(f"[red]Cut error: {e}[/red]")
+                    return
+
+            if query.lower().startswith('identify '):
+                self._handle_identify(query)
+            else:
+                self._execute_query(query)
 
     def _print_welcome(self):
         """Print welcome message."""
@@ -218,10 +254,23 @@ class PRAnalysisCLI:
   WHERE label_names CONTAINS 'vector'
   WHERE author LIKE '%spring%'
   WHERE state IN ('open', 'closed')
+  WHERE author NOT IN ('alice', 'bob')
+  WHERE label_names NOT CONTAINS 'bug'
   WHERE created_at_dt > now-30d
   WHERE updated_at_dt < now-6M
 
+[blue]Cut Commands (named reusable filters):[/blue]
+  cut <name> <expression>              - Define a named cut
+  uncut <name>                         - Remove a named cut
+  cuts                                 - List all defined cuts
+
+  Example:
+    cut trusted author IN ('sdeleuze', 'markpollack')
+    cut fresh created_at_dt > now-7d
+    identify $trusted AND $fresh
+
 [blue]Utility Commands:[/blue]
+  source <file>                          - Execute commands from a file
   fields                                 - Show available fields
   identify WHERE condition               - Find specific PRs in a table
   save filename.png                      - Save current plot
@@ -368,6 +417,65 @@ class PRAnalysisCLI:
         except Exception as e:
             self.console.print(f"[red]Identify error: {e}[/red]")
 
+    def _handle_cut_define(self, query: str):
+        """Handle cut definition: cut <name> <expression>."""
+        parts = query.split(None, 2)
+        if len(parts) < 3:
+            self.console.print("[red]Usage: cut <name> <expression>[/red]")
+            return
+        name = parts[1]
+        expression = parts[2]
+        self.cut_registry.define(name, expression)
+        self.console.print(f"Cut '${name}' defined: {expression}")
+
+    def _handle_cut_remove(self, query: str):
+        """Handle cut removal: uncut <name>."""
+        parts = query.split()
+        if len(parts) < 2:
+            self.console.print("[red]Usage: uncut <name>[/red]")
+            return
+        name = parts[1]
+        try:
+            self.cut_registry.remove(name)
+            self.console.print(f"Cut '${name}' removed")
+        except KeyError:
+            self.console.print(f"[red]Cut '${name}' not found[/red]")
+
+    def _handle_source(self, query: str):
+        """Handle source command: source <filename>."""
+        filename = query.split(None, 1)[1].strip() if len(query.split(None, 1)) > 1 else ""
+        if not filename:
+            self.console.print("[red]Usage: source <filename>[/red]")
+            return
+        if not os.path.exists(filename):
+            self.console.print(f"[red]File not found: {filename}[/red]")
+            return
+        count = 0
+        with open(filename) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                try:
+                    self._dispatch(line)
+                    count += 1
+                except Exception as e:
+                    self.console.print(f"[red]Error in '{line}': {e}[/red]")
+        self.console.print(f"Sourced {count} commands from {filename}")
+
+    def _handle_cuts_list(self):
+        """Handle cuts listing."""
+        cuts = self.cut_registry.list_all()
+        if not cuts:
+            self.console.print("No cuts defined")
+            return
+        table = Table(title="Defined Cuts")
+        table.add_column("Name", style="cyan")
+        table.add_column("Expression", style="white")
+        for name, expr in cuts.items():
+            table.add_row(f"${name}", expr)
+        self.console.print(table)
+
 
 def main():
     """Main entry point."""
@@ -376,8 +484,17 @@ def main():
     if plain:
         args.remove("--plain")
 
+    init_file = None
+    if "--init" in args:
+        idx = args.index("--init")
+        if idx + 1 >= len(args):
+            print("Error: --init requires a filename")
+            sys.exit(1)
+        init_file = args[idx + 1]
+        args = args[:idx] + args[idx + 2:]
+
     if len(args) != 1:
-        print("Usage: python -m prplot [--plain] <json_file>")
+        print("Usage: python -m prplot [--plain] [--init <file>] <json_file>")
         sys.exit(1)
 
     json_file = args[0]
@@ -385,7 +502,7 @@ def main():
         print(f"Error: File {json_file} not found")
         sys.exit(1)
 
-    cli = PRAnalysisCLI(json_file, plain=plain)
+    cli = PRAnalysisCLI(json_file, plain=plain, init_file=init_file)
     cli.run()
 
 

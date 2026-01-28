@@ -50,6 +50,8 @@ class QueryEngine:
 
         if cond_type == 'comparison':
             return self._evaluate_comparison(df, condition)
+        elif cond_type == 'not':
+            return ~self._evaluate_condition(df, condition['operand'])
         elif cond_type == 'boolean':
             left_result = self._evaluate_condition(df, condition['left'])
             right_result = self._evaluate_condition(df, condition['right'])

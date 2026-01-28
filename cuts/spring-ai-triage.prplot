@@ -1,0 +1,9 @@
+# Time-based triage cuts
+cut fresh created_at_dt > now-7d
+cut recent created_at_dt > now-30d
+cut stale age_days > 180
+cut ancient age_days > 365
+
+# Activity cuts
+cut active comment_count > 5
+cut quiet comment_count = 0
